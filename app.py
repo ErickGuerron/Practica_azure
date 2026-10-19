@@ -17,7 +17,7 @@ def getConnection():
         database=os.environ.get("DB_NAME"),
         port=1433,
         cafile=certifi.where(),
-        validate_host=true
+        validate_host=True
     )
 
 @app.route('/test-db',methods=['GET'])
