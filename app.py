@@ -21,18 +21,32 @@ def getConnection():
     )
 
 def enviar_correo(proceso, detalle):
-    url = 'https://api.brevo.com/v3/smpt/email'
+    url = 'https://api.brevo.com/v3/smtp/email'
+
     headers = {
-        'api-key': os.getenv('BREVO_API_KEY'),
-        'Content-Type':'application/json'
+        'api-key': os.environ['BREVO_API_KEY'],
+        'Content-Type': 'application/json'
     }
+
     data = {
-        'sender':{'email':os.getenv('EMAIL_REMITENTE')},
-        'to':[{'email':os.getenv('EMAIL_DESTINO')}],
+        'sender': {
+            'email': os.environ['EMAIL_REMITENTE']
+        },
+        'to': [{
+            'email': os.environ['EMAIL_DESTINO']
+        }],
         'subject': f'[{proceso}]',
-        'textContent':detalle
+        'textContent': detalle
     }
-    requests.post(url, headers=headers, json=data)
+
+    response = requests.post(
+        url,
+        headers=headers,
+        json=data,
+        timeout=15
+    )
+
+    response.raise_for_status()
 
 @app.route('/test-db',methods=['GET'])
 def test_db():
@@ -156,27 +170,48 @@ def create_product():
             }
         ), 500
 
-@app.route('/api/procesar',methods=['POST'])
+@app.route('/api/procesar', methods=['POST'])
 def procesar():
-    api_key = request.headers.get('X-API-KEY')
-    if not api_key or not hmac.compare_digest(
-        api_key, os.getenv('PROCESS_API_KEY')
-    ):
-        return jsonify({'error': 'API Key no valida'}), 401
+    expected_key = os.getenv('PROCESS_API_KEY')
 
-    conn = getConnection()
-    cursor = conn.cursor()
-    cursor.execute("SELET COUNT(*) FROM dbo.products_vw")
-    total = cursor.fetchone()[0]
-    cursor.close()
-    conn.close()
-    enviar_correo('Consulta de productos',
-                  f'Se preocesaron {total} registros.')
-    return jsonify({
-        'procesamiento': 'finalizado',
-        'total_productos': total,
-        'notificacion': 'enviado'
-    })
+    if not expected_key:
+        app.logger.error("PROCESS_API_KEY no configurada")
+        return jsonify({
+            'error': 'Configuración del servidor incompleta'
+        }), 500
+
+    api_key = request.headers.get('X-API-Key', '')
+
+    if not hmac.compare_digest(api_key, expected_key):
+        return jsonify({
+            'error': 'API Key no valida'
+        }), 401
+
+    try:
+        with getConnection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM dbo.PRODUCTS_VW"
+                )
+                total = cursor.fetchone()[0]
+
+        enviar_correo(
+            'Consulta de productos',
+            f'Se procesaron {total} registros.'
+        )
+
+        return jsonify({
+            'procesamiento': 'finalizado',
+            'total_productos': total,
+            'notificacion': 'enviado'
+        }), 200
+
+    except Exception:
+        app.logger.exception("Error al procesar productos")
+
+        return jsonify({
+            'error': 'Error interno al procesar productos'
+        }), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
