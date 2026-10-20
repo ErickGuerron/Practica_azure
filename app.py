@@ -1,7 +1,5 @@
 from flask import Flask, jsonify, request
-import os
-import certifi
-import pytds
+import os, certifi, pytds, requests, hmac
 
 #===============================
 # conexion con la base de datos
@@ -18,8 +16,23 @@ def getConnection():
         port=1433,
         cafile=certifi.where(),
         validate_host=True,
-        row_strategy=pytds.namedtuple_row_strategy
+        row_strategy=pytds.namedtuple_row_strategy,
+        enc_login_only=False
     )
+
+def enviar_correo(proceso, detalle):
+    url = 'https://api.brevo.com/v3/smpt/email'
+    headers = {
+        'api-key': os.getenv('BREVO_API_KEY'),
+        'Content-Type':'application/json'
+    }
+    data = {
+        'sender':{'email':os.getenv('EMAIL_REMITENTE')},
+        'to':[{'email':os.getenv('EMAIL_DESTINO')}],
+        'subject': f'[{proceso}]',
+        'textContent':detalle
+    }
+    requests.post(url, headers=headers, json=data)
 
 @app.route('/test-db',methods=['GET'])
 def test_db():
@@ -142,7 +155,28 @@ def create_product():
                 "error": str(e)
             }
         ), 500
-        
+
+@app.route('/api/procesar',methods=['POST'])
+def procesar():
+    api_key = request.headers.get('X-API-KEY')
+    if not api_key or not hmac.compare_digest(
+        api_key, os.getenv('PROCESS_API_KEY')
+    ):
+        return jsonify({'error': 'API Key no valida'}), 401
+
+    conn = getConnection()
+    cursor = conn.cursor()
+    cursor.execute("SELET COUNT(*) FROM dbo.products_vw")
+    total = cursor.fetchone()[0]
+    cursor.close()
+    conn.close()
+    enviar_correo('Consulta de productos',
+                  f'Se preocesaron {total} registros.')
+    return jsonify({
+        'procesamiento': 'finalizado',
+        'total_productos': total,
+        'notificacion': 'enviado'
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
