@@ -24,16 +24,16 @@ def enviar_correo(proceso, detalle):
     url = 'https://api.brevo.com/v3/smtp/email'
 
     headers = {
-        'api-key': os.environ['BREVO_API_KEY'],
+        'api-key': os.environ.get('BREVO_API_KEY'),
         'Content-Type': 'application/json'
     }
 
     data = {
         'sender': {
-            'email': os.environ['EMAIL_REMITENTE']
+            'email': os.environ.get('EMAIL_REMITENTE')
         },
         'to': [{
-            'email': os.environ['EMAIL_DESTINO']
+            'email': os.environ.get('EMAIL_DESTINO')
         }],
         'subject': f'[{proceso}]',
         'textContent': detalle
@@ -172,7 +172,7 @@ def create_product():
 
 @app.route('/api/procesar', methods=['POST'])
 def procesar():
-    expected_key = os.getenv('PROCESS_API_KEY')
+    expected_key = os.environ.get('PROCESS_API_KEY')
 
     if not expected_key:
         app.logger.error("PROCESS_API_KEY no configurada")
