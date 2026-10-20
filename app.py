@@ -46,63 +46,67 @@ def test_db():
 @app.route('/api/products', methods=['GET'])
 def get_products():
     try:
-        conn = getConnection()
-        cursor = conn.cursor()
+        with getConnection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id, names, price, stock
+                    FROM PRODUCTS_VW
+                """)
 
-        cursor.execute("""
-        SELECT id, names, price, stock FROM PRODUCTS_VW
-        """)
-        products =[]
-        for row in cursor.fetchall():
-            products.append({
-                "id":row.id,
-                "names":row.names,
-                "price":row.price,
-                "stock":row.stock
-            })
-        cursor.close()
-        conn.close()
-        return jsonify(products),200
-    
-    except Exception as e:
-        return jsonify(
-            {
-                "message": "Error",
-                "error": str(e)
-            }
-        ), 500
+                products = []
+
+                for row in cursor.fetchall():
+                    products.append({
+                        "id": row[0],
+                        "names": row[1],
+                        "price": row[2],
+                        "stock": row[3]
+                    })
+
+        return jsonify(products), 200
+
+    except Exception:
+        app.logger.exception("Error al consultar productos")
+
+        return jsonify({
+            "message": "Error interno al consultar productos"
+        }), 500
 
 @app.route('/api/products/<int:id>', methods=['GET'])
 def get_product(id):
     try:
-        conn = getConnection()
-        cursor = conn.cursor()
+        with getConnection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id, names, price, stock
+                    FROM PRODUCTS_VW
+                    WHERE id = ?
+                """, (id,))
 
-        cursor.execute("""
-           SELECT id, names, price, stock FROM PRODUCTS_VW WHERE id = ?"""
-                       , id)
-        row = cursor.fetchone()
-        cursor.close()
-        conn.close()
+                row = cursor.fetchone()
 
-        if row:
-            product = {
-                "id": row.id,
-                "names": row.names,
-                "price": row.price,
-                "stock": row.stock
-            }
-            return jsonify(product), 200
+        if row is None:
+            return jsonify({
+                "message": "Producto no encontrado"
+            }), 404
 
-        return jsonify({"message": "Product not found"}), 404
+        product = {
+            "id": row[0],
+            "names": row[1],
+            "price": row[2],
+            "stock": row[3]
+        }
 
-    except Exception as e:
-        return jsonify(
-            {
-                "message": "Error",
-                "error": str(e)
-            }
-        ), 500
+        return jsonify(product), 200
+
+    except Exception:
+        app.logger.exception(
+            "Error al consultar el producto %s", id
+        )
+
+        return jsonify({
+            "message": "Error interno al consultar el producto"
+        }), 500
 
 @app.route('/api/products', methods=['POST'])
 def create_product():
