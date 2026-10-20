@@ -21,32 +21,58 @@ def getConnection():
     )
 
 def enviar_correo(proceso, detalle):
-    url = 'https://api.brevo.com/v3/smtp/email'
+    api_key = os.environ.get("BREVO_API_KEY", "").strip()
+    remitente = os.environ.get("EMAIL_REMITENTE")
+    destino = os.environ.get("EMAIL_DESTINO")
+
+    if not all([api_key, remitente, destino]):
+        raise ValueError(
+            "Faltan variables de entorno para Brevo"
+        )
+
+    url = "https://api.brevo.com/v3/smtp/email"
 
     headers = {
-        'api-key': os.environ.get('BREVO_API_KEY'),
-        'Content-Type': 'application/json'
+        "api-key": api_key,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
     }
 
     data = {
-        'sender': {
-            'email': os.environ.get('EMAIL_REMITENTE')
+        "sender": {
+            "email": remitente
         },
-        'to': [{
-            'email': os.environ.get('EMAIL_DESTINO')
-        }],
-        'subject': f'[{proceso}]',
-        'textContent': detalle
+        "to": [
+            {"email": destino}
+        ],
+        "subject": f"[{proceso}]",
+        "textContent": detalle
     }
 
-    response = requests.post(
-        url,
-        headers=headers,
-        json=data,
-        timeout=15
-    )
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json=data,
+            timeout=15
+        )
 
-    response.raise_for_status()
+        if not response.ok:
+            app.logger.error(
+                "Error Brevo HTTP %s: %s",
+                response.status_code,
+                response.text[:1000]
+            )
+
+        response.raise_for_status()
+
+        return response.json()
+
+    except requests.exceptions.RequestException:
+        app.logger.exception(
+            "Error de comunicación con Brevo"
+        )
+        raise
 
 @app.route('/test-db',methods=['GET'])
 def test_db():
