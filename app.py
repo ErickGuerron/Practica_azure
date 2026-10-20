@@ -172,46 +172,47 @@ def create_product():
 
 @app.route('/api/procesar', methods=['POST'])
 def procesar():
-    expected_key = os.environ.get('PROCESS_API_KEY')
+    api_key = request.headers.get('X-API-Key', '')
+    expected_key = os.getenv('PROCESS_API_KEY', '')
+
+    app.logger.info(
+        "PROCESS_API_KEY configurada: %s",
+        bool(expected_key)
+    )
+
+    app.logger.info(
+        "Cabecera X-API-Key recibida: %s",
+        bool(api_key)
+    )
+
+    app.logger.info(
+        "Longitud clave configurada: %d",
+        len(expected_key)
+    )
+
+    app.logger.info(
+        "Longitud clave recibida: %d",
+        len(api_key)
+    )
 
     if not expected_key:
-        app.logger.error("PROCESS_API_KEY no configurada")
         return jsonify({
-            'error': 'Configuración del servidor incompleta'
+            'error': 'PROCESS_API_KEY no configurada'
         }), 500
 
-    api_key = request.headers.get('X-API-Key', '')
+    if not api_key:
+        return jsonify({
+            'error': 'No se envio X-API-Key'
+        }), 401
 
     if not hmac.compare_digest(api_key, expected_key):
         return jsonify({
             'error': 'API Key no valida'
         }), 401
 
-    try:
-        with getConnection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT COUNT(*) FROM dbo.PRODUCTS_VW"
-                )
-                total = cursor.fetchone()[0]
-
-        enviar_correo(
-            'Consulta de productos',
-            f'Se procesaron {total} registros.'
-        )
-
-        return jsonify({
-            'procesamiento': 'finalizado',
-            'total_productos': total,
-            'notificacion': 'enviado'
-        }), 200
-
-    except Exception:
-        app.logger.exception("Error al procesar productos")
-
-        return jsonify({
-            'error': 'Error interno al procesar productos'
-        }), 500
+    return jsonify({
+        'message': 'Autenticacion exitosa'
+    }), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
