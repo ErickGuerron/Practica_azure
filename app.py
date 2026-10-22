@@ -179,9 +179,10 @@ def create_product():
         conn = getConnection()
         cursor = conn.cursor()
 
-        cursor.execute("""
-            EXEC products_insert_sp ?, ?, ?
-        """, (names , price, stock))
+        cursor.execute(
+            "EXEC products_insert_sp %s, %s, %s",
+            (names, price, stock)
+        )
 
         conn.commit()
         cursor.close()
