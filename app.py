@@ -20,7 +20,7 @@ def getConnection():
         enc_login_only=False
     )
 
-def enviar_correo(proceso, detalle):
+def enviar_correo(proceso, html_detalle):
     api_key = os.environ.get("BREVO_API_KEY", "").strip()
     remitente = os.environ.get("EMAIL_REMITENTE")
     destino = os.environ.get("EMAIL_DESTINO")
@@ -46,7 +46,7 @@ def enviar_correo(proceso, detalle):
             {"email": destino}
         ],
         "subject": f"[{proceso}]",
-        "textContent": detalle
+        "htmlContent": html_detalle
     }
 
     try:
@@ -216,14 +216,40 @@ def procesar():
     try:
         with getConnection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT COUNT(*) FROM dbo.PRODUCTS_VW"
-                )
-                total = cursor.fetchone()[0]
+                cursor.execute("SELECT names, price FROM dbo.PRODUCTS_VW")
+                productos = cursor.fetchall()
+                total = len(productos)
+
+        html_content = f"""
+        <p>Se procesaron <b>{total}</b> registros.</p>
+        <p>A continuación la lista de productos:</p>
+        <br>
+        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-family: Arial, sans-serif; width: 100%;">
+            <thead>
+                <tr style="background-color: #f2f2f2; text-align: left;">
+                    <th>Nombre del Producto</th>
+                    <th>Precio</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+
+        for prod in productos:
+            html_content += f"""
+                <tr>
+                    <td>{prod[0]}</td>
+                    <td>{prod[1]}</td>
+                </tr>
+            """
+
+        html_content += """
+            </tbody>
+        </table>
+        """
 
         enviar_correo(
             'Consulta de productos',
-            f'Se procesaron {total} registros.'
+            html_content
         )
 
         return jsonify({
